@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hangul Ninja</title>
+<style>
+  :root{
+    --ink: #15171c;
+    --ink-2: #1d2027;
+    --paper: #ece6d8;
+    --paper-dim: #c9c2ae;
+    --red: #c1392b;
+    --red-bright: #e8503c;
+    --gold: #d4af6a;
+    --line: rgba(236,230,216,0.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(193,57,43,0.18), transparent 60%),
+      linear-gradient(180deg, var(--ink) 0%, #0e0f13 100%);
+    color:var(--paper);
+    font-family: 'Noto Sans KR', 'Segoe UI', system-ui, sans-serif;
+    overflow:hidden;
+  }
+  #app{
+    position:relative;
+    width:100%;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* faint bamboo-stroke texture lines */
+  .texture{
+    position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      repeating-linear-gradient(115deg, var(--line) 0px, var(--line) 1px, transparent 1px, transparent 140px);
+    opacity:0.6;
+  }
+
+  /* ---------- HEADER / HUD ---------- */
+  #hud{
+    position:relative; z-index:5;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 28px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{
+    font-family: Georgia, 'Noto Serif KR', serif;
+    font-weight:700; letter-spacing:0.04em;
+    font-size:22px; color:var(--paper);
+    display:flex; align-items:baseline; gap:10px;
+  }
+  .brand .han{ color:var(--red-bright); font-size:26px; }
+  .brand .sub{ font-size:11px; letter-spacing:0.25em; text-transform:uppercase; color:var(--paper-dim); font-weight:400; }
+
+  .hud-stats{ display:flex; gap:26px; align-items:center; }
+  .stat{ text-align:right; }
+  .stat .label{ font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--paper-dim); }
+  .stat .value{ font-family:Georgia, serif; font-size:24px; font-weight:700; color:var(--gold); line-height:1.1; }
+  #combo-stat .value{ color:var(--red-bright); }
+
+  #lives{ display:flex; gap:6px; }
+  .life{ width:14px; height:14px; transform:rotate(45deg); background:var(--red-bright); box-shadow:0 0 6px rgba(232,80,60,0.6); transition:opacity .25s, transform .25s; }
+  .life.lost{ opacity:0.15; background:transparent; border:1px solid var(--paper-dim); box-shadow:none; }
+
+  /* ---------- SCREENS ---------- */
+  .screen{
+    position:absolute; inset:0; z-index:10;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:24px;
+    background: linear-gradient(180deg, rgba(14,15,19,0.92), rgba(14,15,19,0.97));
+    gap:18px;
+  }
+  .hidden{ display:none !important; }
+
+  .title-big{
+    font-family: Georgia, 'Noto Serif KR', serif;
+    font-size:54px; font-weight:700; letter-spacing:0.02em;
+    color:var(--paper);
+  }
+  .title-big .accent{ color:var(--red-bright); }
+  .tagline{ color:var(--paper-dim); font-size:14px; letter-spacing:0.08em; margin-top:-10px; text-transform:uppercase;}
+
+  .group-select{
+    display:flex; gap:14px; flex-wrap:wrap; justify-content:center; max-width:680px; margin-top:8px;
+  }
+  .group-card{
+    border:1px solid var(--line);
+    background: var(--ink-2);
+    border-radius:6px;
+    padding:16px 18px;
+    cursor:pointer;
+    width:190px;
+    transition: border-color .15s, transform .15s, background .15s;
+    user-select:none;
+  }
+  .group-card:hover{ transform:translateY(-2px); border-color:var(--gold); }
+  .group-card.active{ border-color:var(--red-bright); background:rgba(193,57,43,0.12); }
+  .group-card .gname{ font-weight:700; font-size:15px; margin-bottom:6px; }
+  .group-card .gsample{ font-size:22px; color:var(--gold); letter-spacing:0.1em; }
+  .group-card .gdesc{ font-size:11px; color:var(--paper-dim); margin-top:6px; }
+
+  .btn{
+    font-family:inherit; font-size:15px; font-weight:700; letter-spacing:0.04em;
+    color:var(--ink); background:var(--gold);
+    border:none; border-radius:4px; padding:14px 38px;
+    cursor:pointer; text-transform:uppercase;
+    transition: transform .12s, box-shadow .12s, background .12s;
+    box-shadow:0 4px 0 rgba(0,0,0,0.3);
+  }
+  .btn:hover{ background:var(--red-bright); color:var(--paper); transform:translateY(-2px); }
+  .btn:active{ transform:translateY(1px); box-shadow:0 1px 0 rgba(0,0,0,0.3); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .btn.secondary{ background:transparent; color:var(--paper-dim); border:1px solid var(--line); box-shadow:none; }
+  .btn.secondary:hover{ color:var(--paper); border-color:var(--paper-dim); background:transparent; }
+
+  .hint{ color:var(--paper-dim); font-size:13px; max-width:420px; line-height:1.5; }
+
+  #final-score{ font-size:64px; font-family:Georgia, serif; color:var(--gold); font-weight:700; }
+  #final-best{ color:var(--paper-dim); font-size:13px; }
+
+  /* ---------- VICTORY ---------- */
+  .ninja-mark{
+    font-size:120px;
+    font-family: Georgia, 'Noto Serif KR', serif;
+    color:var(--paper);
+    text-shadow: 0 0 40px rgba(212,175,106,0.55), 0 0 90px rgba(232,80,60,0.35);
+    opacity:0;
+    transform: scale(0.4) translateY(30px);
+    animation: ninjaAppear 0.9s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes ninjaAppear{
+    0%{ opacity:0; transform: scale(0.3) translateY(40px); filter:blur(8px); }
+    60%{ opacity:1; transform: scale(1.08) translateY(-4px); filter:blur(0); }
+    100%{ opacity:1; transform: scale(1) translateY(0); filter:blur(0); }
+  }
+  #final-score-v{ font-size:48px; font-family:Georgia, serif; color:var(--gold); font-weight:700; }
+  #victory-screen{
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(212,175,106,0.14), transparent 65%),
+      linear-gradient(180deg, rgba(14,15,19,0.94), rgba(14,15,19,0.98));
+  }
+
+  /* ---------- ARENA ---------- */
+  #arena{
+    position:relative; flex:1; z-index:2;
+    overflow:hidden;
+  }
+  .flyer{
+    position:absolute;
+    font-size:84px;
+    font-weight:700;
+    color:var(--paper);
+    text-shadow: 0 0 22px rgba(236,230,216,0.25), 0 2px 0 rgba(0,0,0,0.4);
+    will-change: transform, left, top;
+    user-select:none;
+    z-index:3;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  .flyer.slashed{
+    animation: slashAway 0.45s ease-out forwards;
+  }
+  .flyer.missed{
+    animation: fadeMiss 0.5s ease-out forwards;
+  }
+  @keyframes slashAway{
+    0%{ filter:none; }
+    35%{ transform: scale(1.15) rotate(var(--rot,8deg)); color:var(--gold); }
+    100%{ transform: scale(0.4) rotate(calc(var(--rot,8deg)*3)) translateY(40px); opacity:0; }
+  }
+  @keyframes fadeMiss{
+    0%{ opacity:1; }
+    100%{ opacity:0; transform:scale(0.8) translateY(20px); filter:blur(3px); }
+  }
+
+  .slash-mark{
+    position:absolute; z-index:6; pointer-events:none;
+    width:160px; height:6px;
+    background:linear-gradient(90deg, transparent, var(--red-bright), var(--gold), transparent);
+    border-radius:3px;
+    transform-origin:center;
+    animation: slashFade 0.4s ease-out forwards;
+    box-shadow:0 0 14px rgba(232,80,60,0.8);
+  }
+  @keyframes slashFade{
+    0%{ opacity:1; transform: scaleX(0.2) rotate(var(--ang,-25deg)); }
+    40%{ opacity:1; transform: scaleX(1) rotate(var(--ang,-25deg)); }
+    100%{ opacity:0; transform: scaleX(1.1) rotate(var(--ang,-25deg)); }
+  }
+
+  .floattext{
+    position:absolute; z-index:7; pointer-events:none;
+    font-family:Georgia, serif; font-weight:700; font-size:20px;
+    color:var(--gold);
+    animation: floatUp 0.8s ease-out forwards;
+  }
+  .floattext.bad{ color:var(--red-bright); }
+  @keyframes floatUp{
+    0%{ opacity:1; transform:translateY(0); }
+    100%{ opacity:0; transform:translateY(-46px); }
+  }
+
+  /* ---------- ANSWER BAR ---------- */
+  #answer-bar{
+    position:relative; z-index:5;
+    display:flex; gap:14px; justify-content:center;
+    padding: 18px 20px 26px;
+    border-top:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .opt-btn{
+    font-family:inherit;
+    min-width:108px;
+    padding:16px 20px;
+    font-size:19px; font-weight:700; letter-spacing:0.03em;
+    background:var(--ink-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    border-radius:6px;
+    cursor:pointer;
+    transition: border-color .12s, transform .1s, background .12s;
+  }
+  .opt-btn:hover{ border-color:var(--gold); transform:translateY(-2px); }
+  .opt-btn:active{ transform:translateY(0); }
+  .opt-btn.correct{ background:rgba(212,175,106,0.18); border-color:var(--gold); color:var(--gold); }
+  .opt-btn.wrong{ background:rgba(193,57,43,0.18); border-color:var(--red-bright); color:var(--red-bright); }
+  .opt-btn:disabled{ cursor:default; }
+
+  #combo-banner{
+    position:absolute; top:90px; left:50%; transform:translateX(-50%) scale(0.6);
+    z-index:8; pointer-events:none;
+    font-family:Georgia, serif; font-weight:700; font-size:38px;
+    color:var(--red-bright);
+    text-shadow:0 0 18px rgba(232,80,60,0.7);
+    opacity:0;
+    letter-spacing:0.05em;
+  }
+  #combo-banner.show{ animation: comboPop 0.7s ease-out forwards; }
+  @keyframes comboPop{
+    0%{ opacity:0; transform:translateX(-50%) scale(0.5); }
+    25%{ opacity:1; transform:translateX(-50%) scale(1.08); }
+    70%{ opacity:1; transform:translateX(-50%) scale(1); }
+    100%{ opacity:0; transform:translateX(-50%) scale(0.95) translateY(-10px); }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .flyer, .slash-mark, .floattext, #combo-banner{ animation-duration:0.01ms !important; }
+  }
+
+  @media (max-width: 640px){
+    .title-big{ font-size:38px; }
+    .flyer{ font-size:56px; }
+    .opt-btn{ font-size:16px; padding:13px 14px; min-width:80px; }
+    .hud-stats{ gap:14px; }
+    .group-card{ width:150px; padding:12px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="texture"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="brand"><span class="han">忍</span>HANGUL NINJA<span class="sub">한글</span></div>
+    <div class="hud-stats">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score-val">0</div></div>
+      <div class="stat" id="combo-stat"><div class="label">Combo</div><div class="value" id="combo-val">x1</div></div>
+      <div class="stat"><div class="label">Mastery</div><div class="value" id="progress-val">0/0</div></div>
+      <div class="stat"><div class="label">Lives</div><div id="lives"></div></div>
+    </div>
+  </div>
+
+  <!-- ARENA (gameplay happens here) -->
+  <div id="arena">
+    <div id="combo-banner"></div>
+  </div>
+
+  <div id="answer-bar"></div>
+
+  <!-- START SCREEN -->
+  <div class="screen" id="start-screen">
+    <div class="title-big">HANGUL<span class="accent">忍</span>NINJA</div>
+    <div class="tagline">Slice the sound. Master the script.</div>
+    <p class="hint">Pick which letter groups to train. A character will fly across the screen — choose its correct pronunciation before it escapes. Chain correct answers to build your combo multiplier.</p>
+    <div class="group-select" id="group-select">
+      <div class="group-card active" data-group="vowels">
+        <div class="gname">Vowels</div>
+        <div class="gsample">ㅏ ㅓ ㅗ</div>
+        <div class="gdesc">10 basic vowels</div>
+      </div>
+      <div class="group-card active" data-group="basic-consonants">
+        <div class="gname">Consonants</div>
+        <div class="gsample">ㄱ ㄴ ㅁ</div>
+        <div class="gdesc">10 basic consonants</div>
+      </div>
+      <div class="group-card" data-group="advanced-consonants">
+        <div class="gname">Advanced</div>
+        <div class="gsample">ㄲ ㅆ ㅊ</div>
+        <div class="gdesc">Aspirated &amp; tense</div>
+      </div>
+    </div>
+    <button class="btn" id="start-btn">Begin Training</button>
+    <p class="hint" id="select-warning" style="color:var(--red-bright); display:none;">Select at least one group to begin.</p>
+  </div>
+
+  <!-- GAME OVER SCREEN -->
+  <div class="screen hidden" id="end-screen">
+    <div class="tagline">Training Complete</div>
+    <div id="final-score">0</div>
+    <div id="final-best" class="hint">Best: 0</div>
+    <button class="btn" id="retry-btn">Train Again</button>
+    <button class="btn secondary" id="menu-btn">Change Groups</button>
+  </div>
+
+  <!-- VICTORY SCREEN -->
+  <div class="screen hidden" id="victory-screen">
+    <div class="ninja-mark" id="ninja-mark">忍</div>
+    <div class="tagline" style="color:var(--gold);">Mastery Achieved</div>
+    <div class="title-big" style="font-size:38px;">The Ninja Approves</div>
+    <p class="hint" id="victory-detail">You sliced 0 of 0 correctly.</p>
+    <div id="final-score-v">0</div>
+    <button class="btn" id="victory-continue-btn">Return to Dojo</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- DATA ----------------
+  const GROUPS = {
+    "vowels": [
+      ["ㅏ","a"],["ㅑ","ya"],["ㅓ","eo"],["ㅕ","yeo"],["ㅗ","o"],
+      ["ㅛ","yo"],["ㅜ","u"],["ㅠ","yu"],["ㅡ","eu"],["ㅣ","i"]
+    ],
+    "basic-consonants": [
+      ["ㄱ","g/k"],["ㄴ","n"],["ㄷ","d/t"],["ㄹ","r/l"],["ㅁ","m"],
+      ["ㅂ","b/p"],["ㅅ","s/sh"],["ㅇ","ng/silent"],["ㅈ","j"],["ㅎ","h"]
+    ],
+    "advanced-consonants": [
+      ["ㅊ","ch"],["ㅋ","k"],["ㅌ","t"],["ㅍ","p"],["ㄲ","kk"],
+      ["ㄸ","tt"],["ㅃ","pp"],["ㅆ","ss"],["ㅉ","jj"]
+    ]
+  };
+
+  // ---------------- STATE ----------------
+  let activeGroups = ["vowels","basic-consonants"];
+  let pool = [];           // flat list of [char, sound] for selected groups
+  let score = 0;
+  let combo = 1;
+  let comboCount = 0;      // consecutive correct, for combo banner thresholds
+  let lives = 3;
+  let maxLives = 3;
+  let bestScore = 0;
+  let running = false;
+  let spawnTimer = null;
+  let currentFlyer = null; // {el, char, sound, distractors}
+  let speedLevel = 1;       // increases over time for difficulty
+  let answeredCount = 0;
+  let correctCount = 0;     // total correct answers this run
+  let target = 0;           // correct answers needed to win = groups * 25
+
+  try {
+    const saved = localStorage.getItem("hangulNinjaBest");
+    if (saved) bestScore = parseInt(saved, 10) || 0;
+  } catch(e) { /* storage may be unavailable; ignore */ }
+
+  // ---------------- DOM ----------------
+  const arena = document.getElementById("arena");
+  const answerBar = document.getElementById("answer-bar");
+  const scoreVal = document.getElementById("score-val");
+  const comboVal = document.getElementById("combo-val");
+  const livesWrap = document.getElementById("lives");
+  const startScreen = document.getElementById("start-screen");
+  const endScreen = document.getElementById("end-screen");
+  const groupSelect = document.getElementById("group-select");
+  const startBtn = document.getElementById("start-btn");
+  const retryBtn = document.getElementById("retry-btn");
+  const menuBtn = document.getElementById("menu-btn");
+  const selectWarning = document.getElementById("select-warning");
+  const finalScoreEl = document.getElementById("final-score");
+  const finalBestEl = document.getElementById("final-best");
+  const comboBanner = document.getElementById("combo-banner");
+  const progressVal = document.getElementById("progress-val");
+  const victoryScreen = document.getElementById("victory-screen");
+  const victoryDetail = document.getElementById("victory-detail");
+  const finalScoreV = document.getElementById("final-score-v");
+  const victoryContinueBtn = document.getElementById("victory-continue-btn");
+
+  // ---------------- GROUP SELECTION UI ----------------
+  groupSelect.querySelectorAll(".group-card").forEach(card => {
+    card.addEventListener("click", () => {
+      card.classList.toggle("active");
+      selectWarning.style.display = "none";
+    });
+  });
+
+  startBtn.addEventListener("click", () => {
+    const chosen = Array.from(groupSelect.querySelectorAll(".group-card.active"))
+      .map(c => c.dataset.group);
+    if (chosen.length === 0) {
+      selectWarning.style.display = "block";
+      return;
+    }
+    activeGroups = chosen;
+    startGame();
+  });
+
+  retryBtn.addEventListener("click", startGame);
+  menuBtn.addEventListener("click", () => {
+    endScreen.classList.add("hidden");
+    startScreen.classList.remove("hidden");
+  });
+  victoryContinueBtn.addEventListener("click", () => {
+    victoryScreen.classList.add("hidden");
+    startScreen.classList.remove("hidden");
+  });
+
+  // ---------------- LIVES UI ----------------
+  function renderLives(){
+    livesWrap.innerHTML = "";
+    for (let i=0;i<maxLives;i++){
+      const d = document.createElement("div");
+      d.className = "life" + (i >= lives ? " lost" : "");
+      livesWrap.appendChild(d);
+    }
+  }
+
+  // ---------------- GAME FLOW ----------------
+  function buildPool(){
+    pool = [];
+    activeGroups.forEach(g => { pool = pool.concat(GROUPS[g]); });
+  }
+
+  function startGame(){
+    buildPool();
+    score = 0;
+    combo = 1;
+    comboCount = 0;
+    lives = 3;
+    speedLevel = 1;
+    answeredCount = 0;
+    correctCount = 0;
+    target = activeGroups.length * 25;
+    running = true;
+    scoreVal.textContent = "0";
+    comboVal.textContent = "x1";
+    progressVal.textContent = "0/" + target;
+    renderLives();
+    startScreen.classList.add("hidden");
+    endScreen.classList.add("hidden");
+    victoryScreen.classList.add("hidden");
+    clearArena();
+    spawnNext();
+  }
+
+  function endGame(){
+    running = false;
+    clearTimeout(spawnTimer);
+    if (currentFlyer && currentFlyer.el) currentFlyer.el.remove();
+    currentFlyer = null;
+    answerBar.innerHTML = "";
+    if (score > bestScore){
+      bestScore = score;
+      try { localStorage.setItem("hangulNinjaBest", String(bestScore)); } catch(e){}
+    }
+    finalScoreEl.textContent = String(score);
+    finalBestEl.textContent = "Best: " + bestScore;
+    endScreen.classList.remove("hidden");
+  }
+
+  function winGame(){
+    running = false;
+    clearTimeout(spawnTimer);
+    answerBar.innerHTML = "";
+    if (score > bestScore){
+      bestScore = score;
+      try { localStorage.setItem("hangulNinjaBest", String(bestScore)); } catch(e){}
+    }
+    victoryDetail.textContent = "You sliced " + correctCount + " of " + target + " correctly.";
+    finalScoreV.textContent = String(score);
+    // restart the ninja-appear animation each time
+    const mark = document.getElementById("ninja-mark");
+    mark.style.animation = "none";
+    void mark.offsetWidth;
+    mark.style.animation = "";
+    victoryScreen.classList.remove("hidden");
+  }
+
+  function clearArena(){
+    arena.querySelectorAll(".flyer, .slash-mark, .floattext").forEach(n => n.remove());
+  }
+
+  // pick distractor sounds that are NOT the correct sound, prefer same group flavor
+  function pickOptions(correctPair){
+    const numOptions = pool.length <= 4 ? Math.min(3, pool.length) : (Math.random() < 0.5 ? 3 : 4);
+    const others = pool.filter(p => p[1] !== correctPair[1]);
+    shuffle(others);
+    const distractors = others.slice(0, Math.max(0, numOptions - 1));
+    const opts = [correctPair[1]].concat(distractors.map(d => d[1]));
+    shuffle(opts);
+    return opts;
+  }
+
+  function shuffle(arr){
+    for (let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i+1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function spawnNext(){
+    if (!running) return;
+    const pair = pool[Math.floor(Math.random() * pool.length)];
+    const [char, sound] = pair;
+    const options = pickOptions(pair);
+
+    const el = document.createElement("div");
+    el.className = "flyer";
+    el.textContent = char;
+
+    const arenaRect = arena.getBoundingClientRect();
+    const startY = 40 + Math.random() * Math.max(40, (arenaRect.height - 160));
+    const fromLeft = Math.random() < 0.5;
+    el.style.top = startY + "px";
+    el.style.left = (fromLeft ? -120 : arenaRect.width + 120) + "px";
+    arena.appendChild(el);
+
+    const baseDuration = Math.max(3.2, 7.5 - speedLevel * 0.35); // seconds, gets faster
+    const travelDistance = arenaRect.width + 240;
+    const endLeft = fromLeft ? arenaRect.width + 120 : -120;
+
+    let startTime = null;
+    let rafId = null;
+    let escaped = false;
+
+    function step(ts){
+      if (!startTime) startTime = ts;
+      const elapsed = (ts - startTime) / 1000;
+      const t = Math.min(1, elapsed / baseDuration);
+      const startLeft = fromLeft ? -120 : arenaRect.width + 120;
+      const curLeft = startLeft + (endLeft - startLeft) * t;
+      const bob = Math.sin(elapsed * 2.2) * 14;
+      el.style.left = curLeft + "px";
+      el.style.top = (startY + bob) + "px";
+      if (t < 1 && running && currentFlyer && currentFlyer.el === el){
+        rafId = requestAnimationFrame(step);
+      } else if (t >= 1 && running && currentFlyer && currentFlyer.el === el){
+        escaped = true;
+        onMiss();
+      }
+    }
+    rafId = requestAnimationFrame(step);
+
+    currentFlyer = { el, char, sound, options, rafId, get escaped(){ return escaped; } };
+    renderOptions(options);
+  }
+
+  function renderOptions(options){
+    answerBar.innerHTML = "";
+    options.forEach(opt => {
+      const btn = document.createElement("button");
+      btn.className = "opt-btn";
+      btn.textContent = opt;
+      btn.addEventListener("click", () => handleAnswer(btn, opt));
+      answerBar.appendChild(btn);
+    });
+  }
+
+  function disableOptions(){
+    answerBar.querySelectorAll(".opt-btn").forEach(b => b.disabled = true);
+  }
+
+  function handleAnswer(btn, chosen){
+    if (!running || !currentFlyer) return;
+    const flyer = currentFlyer;
+    disableOptions();
+
+    if (chosen === flyer.sound){
+      btn.classList.add("correct");
+      onCorrect(flyer);
+    } else {
+      btn.classList.add("wrong");
+      // reveal correct one
+      answerBar.querySelectorAll(".opt-btn").forEach(b => {
+        if (b.textContent === flyer.sound) b.classList.add("correct");
+      });
+      onWrong(flyer);
+    }
+  }
+
+  function onCorrect(flyer){
+    comboCount++;
+    combo = 1 + Math.floor(comboCount / 3); // combo grows every 3 correct in a row
+    const gained = 10 * combo;
+    score += gained;
+    correctCount++;
+    scoreVal.textContent = String(score);
+    comboVal.textContent = "x" + combo;
+    progressVal.textContent = correctCount + "/" + target;
+
+    spawnSlash(flyer.el);
+    spawnFloatText(flyer.el, "+" + gained, false);
+    flyer.el.classList.add("slashed");
+    currentFlyer = null;
+
+    if (comboCount > 0 && comboCount % 3 === 0){
+      showComboBanner(combo);
+    }
+
+    answeredCount++;
+    if (answeredCount % 5 === 0) speedLevel++;
+
+    const reachedTarget = correctCount >= target;
+
+    setTimeout(() => {
+      if (!running) return;
+      flyer.el.remove();
+      if (reachedTarget){
+        winGame();
+      } else {
+        spawnNext();
+      }
+    }, 420);
+  }
+
+  function onWrong(flyer){
+    comboCount = 0;
+    combo = 1;
+    comboVal.textContent = "x1";
+    spawnFloatText(flyer.el, flyer.sound, true);
+    loseLife(flyer);
+  }
+
+  function onMiss(){
+    if (!currentFlyer) return;
+    const flyer = currentFlyer;
+    disableOptions();
+    flyer.el.classList.add("missed");
+    spawnFloatText(flyer.el, flyer.sound, true);
+    comboCount = 0;
+    combo = 1;
+    comboVal.textContent = "x1";
+    loseLife(flyer);
+  }
+
+  function loseLife(flyer){
+    lives--;
+    renderLives();
+    currentFlyer = null;
+    setTimeout(() => {
+      flyer.el.remove();
+      if (lives <= 0){
+        endGame();
+      } else if (running){
+        spawnNext();
+      }
+    }, 500);
+  }
+
+  function spawnSlash(targetEl){
+    const r = targetEl.getBoundingClientRect();
+    const arenaRect = arena.getBoundingClientRect();
+    const mark = document.createElement("div");
+    mark.className = "slash-mark";
+    const ang = (Math.random() < 0.5 ? -1 : 1) * (20 + Math.random()*20);
+    mark.style.setProperty("--ang", ang + "deg");
+    mark.style.left = (r.left - arenaRect.left + r.width/2 - 80) + "px";
+    mark.style.top = (r.top - arenaRect.top + r.height/2 - 3) + "px";
+    arena.appendChild(mark);
+    setTimeout(() => mark.remove(), 450);
+  }
+
+  function spawnFloatText(targetEl, text, bad){
+    const r = targetEl.getBoundingClientRect();
+    const arenaRect = arena.getBoundingClientRect();
+    const ft = document.createElement("div");
+    ft.className = "floattext" + (bad ? " bad" : "");
+    ft.textContent = text;
+    ft.style.left = (r.left - arenaRect.left + r.width/2 - 20) + "px";
+    ft.style.top = (r.top - arenaRect.top - 10) + "px";
+    arena.appendChild(ft);
+    setTimeout(() => ft.remove(), 850);
+  }
+
+  function showComboBanner(comboLevel){
+    comboBanner.textContent = "COMBO x" + comboLevel + "!";
+    comboBanner.classList.remove("show");
+    // restart animation
+    void comboBanner.offsetWidth;
+    comboBanner.classList.add("show");
+  }
+
+})();
+</script>
+</body>
+</html>
